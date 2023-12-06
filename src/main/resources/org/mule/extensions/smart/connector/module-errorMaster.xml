@@ -1,0 +1,377 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<module name="errorMaster Smart Connector" category="SELECT"
+        prefix="module-errormaster"
+        
+        doc:description="This module relies in runtime provided components"
+        xmlns="http://www.mulesoft.org/schema/mule/module"
+        xmlns:mule="http://www.mulesoft.org/schema/mule/core"
+        xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+        xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+        xmlns:tns="http://www.mulesoft.org/schema/mule/module-errormaster"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="
+           http://www.mulesoft.org/schema/mule/module http://www.mulesoft.org/schema/mule/module/current/mule-module.xsd
+           http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+           http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+           http://www.mulesoft.org/schema/mule/module-errormaster http://www.mulesoft.org/schema/mule/module-errormaster/current/mule-module-errormaster.xsd">
+           
+
+    <operation name="error-details" doc:description="Used to track the errors">
+        <parameters>
+            <!-- Common Errors -->
+			<parameter name="useGeneratedError" type="boolean"
+				use="OPTIONAL" displayName="Use Generated Error Description Instead"
+				defaultValue="true" role="BEHAVIOUR" order="1" tab="Common Errors"></parameter>
+
+			<parameter name="badRequestError" type="string"
+				use="OPTIONAL" displayName="400 Bad Request"
+				defaultValue='There was an issue with your request' role="BEHAVIOUR"
+				tab="Common Errors"></parameter>
+
+			<parameter name="unauthorizedError" type="string"
+				use="OPTIONAL" displayName="401 Unauthorized"
+				defaultValue='Authentication was not provided or is invalid'
+				role="BEHAVIOUR" tab="Common Errors"></parameter>
+
+			<parameter name="forbiddenError" type="string"
+				use="OPTIONAL" displayName="403 Forbidden"
+				defaultValue='You are not allowed to make this request'
+				role="BEHAVIOUR" tab="Common Errors"></parameter>
+
+			<parameter name="notFoundError" type="string"
+				use="OPTIONAL" displayName="404 Not Found"
+				defaultValue="The resource is not found" role="BEHAVIOUR"
+				tab="Common Errors"></parameter>
+
+			<parameter name="methodNotAllowedError" type="string"
+				use="OPTIONAL" displayName="405 Method Not Allowed"
+				defaultValue="The method is not allowed on the resource"
+				role="BEHAVIOUR" tab="Common Errors"></parameter>
+
+			<parameter name="notAcceptableError" type="string"
+				use="OPTIONAL" displayName="406 Not Acceptable"
+				defaultValue='The API cannot provide the requested accepted response'
+				role="BEHAVIOUR" tab="Common Errors"></parameter>
+
+			<parameter name="timeoutError" type="string" use="OPTIONAL"
+				displayName="408 Request Timeout"
+				defaultValue='The request to the server has been timed-out'
+				role="BEHAVIOUR" tab="Common Errors"></parameter>
+
+			<parameter name="unsupportedMediaTypeError" type="string"
+				displayName="415 Unsupported Media Type" use="OPTIONAL"
+				defaultValue='Media type not supported' role="BEHAVIOUR"
+				tab="Common Errors"></parameter>
+
+			<parameter name="tooManyRequestsError" type="string"
+				use="OPTIONAL" displayName="429 Too Many Requests"
+				defaultValue='You have made too many requests to the server'
+				role="BEHAVIOUR" tab="Common Errors"></parameter>
+
+			<parameter name="expressionError" type="string"
+				use="OPTIONAL" displayName="500 Dataweave Expression Error"
+				defaultValue="Error with data transformation.  See log for details."
+				role="BEHAVIOUR" tab="Common Errors"></parameter>
+
+			<parameter name="serverError" type="string" use="OPTIONAL"
+				displayName="500 Internal Server Error (Default)"
+				defaultValue='There is a server issue' role="BEHAVIOUR"
+				tab="Common Errors"></parameter>
+
+			<parameter name="notImplementedError" type="string"
+				displayName="501 Not Implemented" use="OPTIONAL"
+				defaultValue='The operation has not been implemented'
+				role="BEHAVIOUR" tab="Common Errors"></parameter>
+
+			<parameter name="connectivityError" type="string"
+				use="OPTIONAL" displayName="503 Bad Connectivity"
+				defaultValue="Service unavailable" role="BEHAVIOUR"
+				tab="Common Errors"></parameter>
+
+			<!-- Custom Errors
+			<parameter name="customErrors" type="CustomErrorsType"
+				displayName="Custom Errors" role="CONTENT" tab="Custom Errors"
+				summary="Provide the custom error definitions" defaultValue="#[{}]"></parameter> -->
+
+			<!-- Advanced -->
+			<parameter name="error" type="any"
+				displayName="Error Object" defaultValue="#[error]" role="PRIMARY"
+				order="1" tab="Advanced"></parameter>
+
+			<!-- <parameter name="previousError" type="any" use="OPTIONAL"
+				displayName="Use Previous Error"
+				defaultValue="#[error.exception.errorMessage.payload.error.message default '']"
+				summary="Script to generate the previous error message.  Usually pulled from the external system's response in the error object.  Set empty string to ignore previous errors."
+				role="BEHAVIOUR" tab="Advanced" /> -->
+				
+			<parameter name="responseKey" type="any" use="OPTIONAL"
+				displayName="Response Key Name for Payload"
+				defaultValue="#['error']"
+				summary="The response key name to which to add the error payload.  Set empty string to set the payload as the root element."
+				role="BEHAVIOUR" tab="Advanced" />
+                
+        </parameters>
+        <body>
+			<mule:set-variable
+                value="#[output application/java
+                		fun getErrorTypeAsString(errorType) =
+					    if (!isBlank(errorType.namespace))
+					        errorType.namespace ++ ':' ++ (errorType.identifier default '')
+					    else
+					        'UNKNOWN'
+                    ---
+                    getErrorTypeAsString(vars.error.errorType)]"
+                doc:name="Error Type" variableName="errorType" />
+
+            <mule:logger level="DEBUG"
+                category="org.mulesoft.modules.errorhandler"
+                message='#[output aplication/java ---
+                    "Error type: " ++ (vars.errorType default "") ++ "  Error Description: " ++ (vars.error.description default "")]' />
+
+            <!-- Load the default error definitions. -->
+            <!-- <mule:set-variable
+                value="readUrl('classpath://defaultErrors.dwl', 'text/plain')"
+                doc:name="Default Errors" variableName="defaultErrors" /> -->
+                
+            <ee:transform doc:name="Default Errors">
+                <ee:variables >
+					<ee:set-variable variableName="defaultErrors" ><![CDATA[
+					%dw 2.0
+					output application/json
+					
+					// Conditionally set error message to the user-specified or the generated message.
+					fun getMessage(message) =
+					    if (vars.useGeneratedError default true)
+					        vars.error.description default message
+					    else
+					        message
+					---
+					{
+						// Default error if no matching errors.
+						"UNKNOWN": {
+							code: 500 ++ ':' ++ "Internal Server Error",
+							message: (getMessage(vars.serverError)) ++ '.' ++ (vars.error.description),
+							CorrelationId: correlationId,
+							failedAt:(error.failingComponent as String splitBy('/'))[-1] default error.failingComponent
+					    },
+					    
+					    // List of all standard API-related errors.
+					    
+						"HTTP:BAD_REQUEST": {
+							"code": 400,
+							"reason": "Bad Request",
+							"message": getMessage(vars.badRequestError),
+							"Details": vars.error.description,
+							"CorrelationId": correlationId,
+							"failedAt": (vars.error.failingComponent as String splitBy('/'))[-1] default vars.error.failingComponent
+						},
+						"HTTP:PARSING": {
+							"code": 400,
+							"reason": "Bad Request",
+							"message": getMessage(vars.badRequestError),
+							"Details": vars.error.description,
+							"CorrelationId": correlationId
+						},
+						"HTTP:CLIENT_SECURITY": {
+							"code": 401,
+							"reason": "Unauthorized",
+							"message": getMessage(vars.unauthorizedError),
+							"Details": vars.error.description,
+							"CorrelationId": correlationId
+						},	
+						"HTTP:SECURITY": {
+							"code": 401,
+							"reason": "Unauthorized",
+							"message": getMessage(vars.unauthorizedError),
+							"Details": vars.error.description,
+							"CorrelationId": correlationId
+						},
+						"MULE:SECURITY": {
+							"code": 401,
+							"reason": "Unauthorized",
+							"message": getMessage(vars.unauthorizedError),
+							"Details": vars.error.description,
+							"CorrelationId": correlationId
+						},
+						"HTTP:UNAUTHORIZED": {
+							"code": 401,
+							"reason": "Unauthorized",
+							"message": getMessage(vars.unauthorizedError),
+							"Details": vars.error.description,
+							"CorrelationId": correlationId
+							
+						},
+						"HTTP:FORBIDDEN": {
+							"code": 403,
+							"reason": "Forbidden",
+							"message": getMessage(vars.forbiddenError),
+							"Details": vars.error.description,
+							"CorrelationId": correlationId
+						},	
+						"HTTP:NOT_FOUND": {
+							"code": 404,
+							"reason": "Not Found",
+							"message": getMessage(vars.notFoundError),
+							"Details": vars.error.description,
+							"CorrelationId": correlationId
+						},
+						"HTTP:METHOD_NOT_ALLOWED": {
+							"code": 405,
+							"reason": "Method Not Allowed",
+							"message": getMessage(vars.methodNotAllowedError),
+							"Details": vars.error.description,
+							"CorrelationId": correlationId
+						},
+						"HTTP:NOT_ACCEPTABLE": {
+							"code": 406,
+							"reason": "Not Acceptable",
+							"message": getMessage(vars.notAcceptableError),
+							"Details": vars.error.description,
+							"CorrelationId": correlationId
+						},
+						"HTTP:TIMEOUT": {
+					      "code":408,
+					      "reason": "Request Timeout",
+					      "message": getMessage(vars.timeoutError),
+					      "Details": vars.error.description,
+						  "CorrelationId": correlationId
+						},
+						"HTTP:UNSUPPORTED_MEDIA_TYPE": {
+							"code": 415,
+							"reason": "Unsupported Media Type",
+							"message": getMessage(vars.unsupportedMediaTypeError),
+							"Details": vars.error.description,
+							"CorrelationId": correlationId
+						},
+						"HTTP:TOO_MANY_REQUESTS": {
+					      "code":429,
+					      "reason": "Too Many Requests",
+					      "message": getMessage(vars.tooManyRequestsError),
+						  "Details": vars.error.description,
+						  "CorrelationId": correlationId
+						},
+						"MULE:EXPRESSION": {
+					      "code":500,
+					      "reason": "Internal Server Error",
+						  // Don't provide default error description for expression errors as that is a potential security issue.
+					      "message":vars.expressionError default "",
+							"Details": vars.error.description,
+							"CorrelationId": correlationId
+						},
+						"HTTP:NOT_IMPLEMENTED": {
+							"code": 501,
+							"reason": "Not Implemented",
+							"message": getMessage(vars.notImplementedError),
+							"Details": vars.error.description,
+							"CorrelationId": correlationId
+						},
+						"HTTP:BAD_GATEWAY": {
+							"code": 502,
+							"reason": "Bad Gateway",
+							"message": getMessage(vars.connectivityError),
+							"Details": vars.error.description,
+							"CorrelationId": correlationId
+						},
+						"HTTP:CONNECTIVITY": {
+							"code": 503,
+							"reason": "Service Unavailable",
+							"message": getMessage(vars.connectivityError),
+							"Details": vars.error.description,
+							"CorrelationId": correlationId
+						},
+						"HTTP:RETRY_EXHAUSTED": {
+							"code": 503,
+							"reason": "Service Unavailable",
+							"message": getMessage(vars.connectivityError),
+							"Details": vars.error.description,
+							"CorrelationId": correlationId
+						},
+						"HTTP:SERVICE_UNAVAILABLE": {
+							"code": 503,
+							"reason": "Service Unavailable",
+							"message": getMessage(vars.connectivityError),
+							"Details": vars.error.description,
+							"CorrelationId": correlationId
+						}
+					}
+					]]>
+					</ee:set-variable>
+				</ee:variables>
+            </ee:transform>
+
+            <mule:logger level="DEBUG"
+                message="Default Errors: #[vars.defaultErrors]"
+                category="org.mulesoft.modules.errorhandler"></mule:logger>
+                
+            <!-- <mule:logger level="DEBUG"
+                message="Custom Errors: #[vars.customErrors]"
+                category="org.mulesoft.modules.errorhandler"></mule:logger> -->
+
+            <ee:transform doc:name="Set payload to error">
+                <ee:message>
+                    <ee:set-payload><![CDATA[%dw 2.0
+                        output application/json
+                        
+                        fun getError(errorType, defaultErrors, customErrors = {}) = do {
+							import mergeWith from dw::core::Objects
+						    var errorList = (defaultErrors mergeWith (customErrors default {}))
+						    var foundError = errorList[errorType]
+						    var error = if ( !isEmpty(foundError) ) foundError else errorList["UNKNOWN"]
+						    ---
+						    error
+						}
+						
+                        var error = getError(vars.errorType, vars.defaultErrors, vars.customErrors default {})
+                        var responseKey = vars.responseKey
+                        var responseError = error update {
+                                // Use the previous error message if it exists, otherwise use the provided message.
+                                case message at .message -> message
+                            }
+                        ---
+                        if (!isEmpty(responseKey) and (responseKey is String))
+                            {
+                                (responseKey): responseError
+                            }
+                        else
+                            responseError
+                        ]]>
+                    </ee:set-payload>
+                    <ee:set-attributes><![CDATA[%dw 2.0
+                        output application/java
+                        fun getError(errorType, defaultErrors, customErrors = {}) = do {
+							import mergeWith from dw::core::Objects
+						    var errorList = (defaultErrors mergeWith (customErrors default {}))
+						    var foundError = errorList[errorType]
+						    var error = if ( !isEmpty(foundError) ) foundError else errorList["UNKNOWN"]
+						    ---
+						    error
+						}
+						fun toString(obj, def="") = obj match {
+						    case item if (item is String and !isEmpty(item)) -> item
+						    case item if !isEmpty(item) -> write(item, "application/java")
+						    else -> def
+						}
+                        var error = getError(vars.errorType, vars.defaultErrors, vars.customErrors default {})
+                        var code = error.code default 500
+                        var message = toString(error.message, "Internal Server Error")
+                        var previousMessage = toString(vars.previousError)
+                        var description = toString(vars.error.description)
+                        
+                        // Concatenate current error message, previous error message, and error description without duplicates or empties
+                        var log = (([message, previousMessage, description] filter !isEmpty($)) distinctBy $) joinBy " | "                
+                        ---
+                        {
+                            httpStatus: code as Number,
+                            errorLog: log
+                        }]]>
+                    </ee:set-attributes>
+                </ee:message>
+            </ee:transform>
+            
+            <mule:logger level="DEBUG"
+                category="org.mulesoft.modules.errorhandler"
+                message='#[output application/java --- "Error HTTP Status: " ++ attributes.httpStatus default "" ++ "  Error Response: " ++ write(payload, "application/json") default ""]' />
+		</body>
+        <output type="string" doc:description="Payload's output"/>
+    </operation>
+ </module>
